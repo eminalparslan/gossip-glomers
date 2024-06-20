@@ -1,8 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
-	"time"
+	"strconv"
 
 	maelstrom "github.com/jepsen-io/maelstrom/demo/go"
 )
@@ -20,23 +21,20 @@ func findIndex(arr []string, id string) int {
 	return -1
 }
 
-func snowflake(n *maelstrom.Node) uint64 {
-	unix := uint64(time.Now().UnixMilli())
-	nodeID := findIndex(n.NodeIDs(), n.ID())
-	result := unix<<24 | ((uint64(nodeID) & 0xf) << 20) | (uint64(idCounter) & 0xfffff)
-	idCounter++
-	if idCounter == 1<<20 {
-		idCounter = 0
-	}
-	return result
-}
-
 func main() {
 	n := maelstrom.NewNode()
 	n.Handle("generate", func(msg maelstrom.Message) error {
-		body := make(map[string]interface{})
+		var body map[string]any
+		if err := json.Unmarshal(msg.Body, &body); err != nil {
+			return err
+		}
+
+		nodeID := strconv.Itoa(findIndex(n.NodeIDs(), n.ID()))
+		msgID := strconv.Itoa(int(body["msg_id"].(float64)))
+
+		body = make(map[string]any)
 		body["type"] = "generate_ok"
-		body["id"] = snowflake(n)
+		body["id"] = nodeID + "-" + msgID
 
 		return n.Reply(msg, body)
 	})
